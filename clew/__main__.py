@@ -51,10 +51,9 @@ def read_bam_file(file_name, tag='bc', debug=False):
     file = pysam.AlignmentFile(file_name, 'rb')
 
     clusters = {}       # Stores cluster instances
-    aln_count = 0
 
     # Parse over alignments in file
-    for aln_count, aln in enumerate(file.fetch(until_eof=True)):
+    for aln_count, aln in enumerate(file.fetch(until_eof=True), 1):
 
         # Get cluster id as dict key
         try:
