@@ -1,11 +1,10 @@
 import pysam
-from Cluster import *
 import sys
 import argparse
 import os
-from time import localtime, strftime
 from util import verbosity
-from multiprocessing import Pool
+from Cluster import *
+
 
 def get_file_name(input_name):
     cwd = os.getcwd()
@@ -46,34 +45,32 @@ def get_argument_parser():
     return parser.parse_args()
 
 
-def read_bam_file_parallel(file_name, tag, quiet, debug=False):
-    verbosity('Reading and storing alignment information' + file_name, quiet)
+def read_bam_file(file_name, tag='bc', debug=False):
+    verbosity('Reading and storing alignment information ' + file_name, args.quiet)
 
     file = pysam.AlignmentFile(file_name, 'rb')
 
-    clusters = {}
+    clusters = {}       # Stores cluster instances
     aln_count = 0
-    for aln in file.fetch(until_eof=True):
-        aln_count += 1
 
+    # Parse over alignments in file
+    for aln_count, aln in enumerate(file.fetch(until_eof=True)):
+
+        # Get cluster id as dict key
         try:
             cluster_id = aln.get_tag(tag=tag)
         except KeyError:
-            if count == 1:
-                verbosity('Tag ' + tag + 'not present in bam record', True)
-                verbosity('Exiting program', True)
-                sys.exit()
+            raise KeyError('Tag ' + tag + 'not present in bam record')
 
-            cluster_id = None
+        # If cluster id not present create new instance
+        if cluster_id not in clusters:
+            clusters[cluster_id] = Cluster(cluster_id)
 
-        if cluster_id is not None:
-            if cluster_id not in clusters:
-                clusters[cluster_id] = Cluster(cluster_id)
-
-            clusters[cluster_id].add_pysam_alignment(aln)
+        # Add alignment to instance
+        clusters[cluster_id].add_pysam_alignment(aln)
 
         if aln_count % 1e6 == 0:
-            verbosity('#' + str(aln_count) + ' alignments analyced', quiet)
+            verbosity('#' + str(aln_count) + ' alignments analyced', args.quiet)
             sys.stdout.flush()
 
         if aln_count % 1e5 == 0 and debug:
@@ -81,53 +78,13 @@ def read_bam_file_parallel(file_name, tag, quiet, debug=False):
 
     file.close()
 
-    verbosity('Complete', quiet)
-
-    return clusters
-
-
-def read_bam_file(file_name, tag, quiet, debug=False):
-    verbosity('Reading and storing alignment information' + file_name, quiet)
-
-    file = pysam.AlignmentFile(file_name, 'rb')
-
-    clusters = {}
-    aln_count = 0
-    for aln in file.fetch(until_eof=True):
-        aln_count += 1
-
-        try:
-            cluster_id = aln.get_tag(tag=tag)
-        except KeyError:
-            if count == 1:
-                verbosity('Tag ' + tag + 'not present in bam record', True)
-                verbosity('Exiting program', True)
-                sys.exit()
-
-            cluster_id = None
-
-        if cluster_id is not None:
-            if cluster_id not in clusters:
-                clusters[cluster_id] = Cluster(cluster_id)
-
-            clusters[cluster_id].add_pysam_alignment(aln)
-
-        if aln_count % 1e6 == 0:
-            verbosity('#' + str(aln_count) + ' alignments analyced', quiet)
-            sys.stdout.flush()
-
-        if aln_count % 1e5 == 0 and debug:
-            break
-
-    file.close()
-
-    verbosity('Complete', quiet)
+    verbosity('Complete', args.quiet)
 
     return clusters
 
 
 def main():
-    global cluster_instances
+    global cluster_instances, args
 
     args = get_argument_parser()
 
@@ -145,7 +102,7 @@ def main():
         else:
             prefix = args.output
 
-    cluster_instances = read_bam_file(args.bam, args.tag, args.quiet, debug=args.debug)
+    cluster_instances = read_bam_file(args.bam, tag=args.tag, debug=args.debug)
 
     # Write output to file
     if not args.debug and args.cluster_data:
